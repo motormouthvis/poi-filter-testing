@@ -51,6 +51,19 @@ Action buttons: **Apply filters**, **Clear**, **Save** (prompts for a name),
 There are seven fields, each with an **include** and an **exclude** text box.
 Values are entered one-per-line (also accepts comma/semicolon separation).
 
+> **Matching behavior (important): values match by "contains" (substring), not
+> exact equality.** Evidence: `category_primary (include) = restaurant` returns
+> records whose `category_primary` is `mexican_restaurant`, `chinese_restaurant`,
+> etc. This is powerful but has sharp edges:
+>
+> - `restaurant` (include) also matches `restaurant_wholesale` (a wholesaler).
+> - `bar` (exclude) also matches `barbecue_restaurant` — so a bare `bar` token can
+>   wrongly drop BBQ places. Prefer specific tokens, or rely on a `basic_category`
+>   gate to remove whole venue types.
+> - `category_alternate` is a *list* of secondary categories; if `restaurant` (or
+>   any `*_restaurant`) appears in that list, an include on `restaurant` will pull
+>   the record in even if it's really a store/service.
+
 | Field | Include param | Exclude param |
 |---|---|---|
 | Business name primary | `name_primary_include_values` | `name_primary_exclude_values` |
