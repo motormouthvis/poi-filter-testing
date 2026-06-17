@@ -16,8 +16,10 @@ which places show up in each category.
 - [`docs/admin-filter-builder.md`](docs/admin-filter-builder.md) — reference for
   the Django admin filter builder (fields, query-builder tokens, how
   include/exclude logic works, the `PoiDetail` data model).
-- [`docs/filters/restaurants.md`](docs/filters/restaurants.md) — a worked example
-  filter for the **Restaurants** category (work in progress).
+- [`docs/filters/restaurants.md`](docs/filters/restaurants.md) — **Restaurants**
+  filter (v3, shippable).
+- [`docs/filters/cafes.md`](docs/filters/cafes.md) — **Cafes** filter (v2, working — 22
+  results at Fort Pierce test pin).
 - [`docs/POI_FILTER_TESTING_CLEAN.md`](docs/POI_FILTER_TESTING_CLEAN.md) — hospital
   filter preset, dev brief, and benchmark (session notes).
 

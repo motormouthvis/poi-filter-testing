@@ -1,151 +1,141 @@
 # Filter: Cafes
 
-> **Status: v1 (discovery) — run this, then paste results back.**
-> We don't have your cafe data sampled yet, so this v1 is intentionally **wide**
-> (low confidence floor, dedup OFF) so we can see everything Overture returns — the
-> good, the junk, and the duplicates. Once you run it and paste the admin result
-> HTML, we'll tighten it to v2/v3 exactly like we did for Restaurants.
+> **Status: SHIPPABLE (v2) — validated across 4 US metros, no name hacks.**
+> Tested at Fort Pierce FL (22), Warren OH (35), San Jose CA (250+), Ely NV / Park
+> City UT (5). The filter is a pure **category gate with no excludes** — that is the
+> correct production design for a nationwide product.
 
-**Goal:** surface real **sit-down coffee & tea shops** a mom would be interested in
-(meet a friend, sit with kids) — coffee shops, cafes, and tea rooms/houses. Exclude
-grab-and-go-only / non-coffee venues: donut chains, ice-cream & dessert shops,
-juice/smoothie bars, internet & hookah cafes, institutional cafeterias, and bars.
+**Goal:** surface real **coffee & tea shops** a mom would sit at (meet a friend, sit
+with kids) — coffee shops, cafes, tea rooms, roasteries. Chains (Starbucks, Dunkin',
+Peet's, Blue Bottle, Panera, Paris Baguette) are **kept in** — a sit-down chain is
+exactly what many users want.
 
-This must be a **generic USA solution** — no hardcoded business names.
+This is a **generic USA solution — no hardcoded business names, ever.**
 
-See [`../admin-filter-builder.md`](../admin-filter-builder.md) for field meanings and
-the match operators (`token` = contains, `"token"` = exact, `token*` = starts-with,
-`*token` = ends-with, `*token*` = contains-anywhere).
+See [`../admin-filter-builder.md`](../admin-filter-builder.md) for field meanings.
 
 ---
 
-## What I need from you (to calibrate)
-
-Run v1 below and **paste the result HTML** (like you did for Restaurants). I'm
-specifically looking at the `basic_category`, `category_primary`, and
-`category_alternate` columns so I can:
-
-1. Find the right `basic_category` value to **gate** on (for Restaurants it was
-   `restaurant`; for cafes it's likely `cafe` — but I want to confirm from your data
-   rather than guess).
-2. See what non-cafes leak in, so we can add targeted excludes.
-
----
-
-## v1 (discovery) — copy/paste into the admin
+## 1. The production filter — copy/paste into the admin
 
 ### Top controls
 
-| Setting | Value | Why |
-|---|---|---|
-| Distance | `5.0` miles | match Restaurants for comparison |
-| Max results | `250` | |
-| Min confidence | `0.0` | **see everything first**; we raise it after calibration |
-| Operating status | `open` | |
-| Deduplicate addresses | **OFF** | see duplicates so we can decide dedup policy |
+| Setting | Value |
+|---|---|
+| Saved filter | `Cafe` |
+| Distance | `10.0` miles (`1`–`3` urban, `10` rural) |
+| Max results | `250` |
+| Min confidence | *(empty)* |
+| Operating status | `open` |
+| Deduplicate addresses | **ON** (collapse same-address dupes like the Starbucks/Daily Grind double-rows) |
 
 ### Include
 
-Leave **Basic category (include)** EMPTY for now (we'll set the gate once we confirm
-the value from your data).
+**Basic category (include):**
+
+```
+coffee_shop
+tea_room
+```
 
 **Category primary (include):**
 
 ```
 coffee_shop
-cafe
 tea_room
-tea_house
+coffee_roastery
 ```
 
-> Notes on substring matching:
-> - `cafe` (contains) will also pull `cafeteria`, `internet_cafe`, `cat_cafe` — that's
->   intentional for discovery; we exclude the unwanted ones below.
-> - I avoided a bare `tea` token on purpose — it would wrongly match `s`**`tea`**`khouse`.
->   If your data uses different tea tokens (e.g. `tea_shop`, `teahouse`, `bubble_tea`),
->   tell me and I'll adjust.
-
-**Category alternate (include):** EMPTY for v1.
-(In Restaurants, including the *alternate* list was the main source of leaks. We'll
-only add it later if recall is too low.)
+(`coffee_roastery` matters: in Ely NV, **Headframe Coffee** has
+`category_primary = coffee_roastery`. Without it you drop real roaster-cafes.)
 
 ### Exclude
 
-**Category primary (exclude):**
-
-```
-fast_food_restaurant
-donut
-doughnut
-ice_cream
-dessert
-frozen_yogurt
-juice
-smoothie
-bubble_tea
-internet_cafe
-cafeteria
-hookah
-```
-
-**Category alternate (exclude):**
-
-```
-fast_food_restaurant
-donut
-doughnut
-ice_cream
-dessert
-frozen_yogurt
-juice
-smoothie
-bubble_tea
-internet_cafe
-cafeteria
-hookah
-```
-
-**Business name primary (exclude):**
-
-```
-food truck
-kiosk
-drive thru
-drive-thru
-```
-
-Leave the other exclude boxes empty.
+**Leave every exclude box empty.** See section 3 for why.
 
 ### Query builder
 
 ```
-category_primary_include and category_primary_exclude and category_alternate_exclude and name_primary_exclude
+basic_category_include or category_primary_include
 ```
 
-Plain English: primary category must be a coffee/cafe/tea type, **and** it's not in
-the primary or alternate exclude lists, **and** its name isn't truck/kiosk/drive-thru.
+`or` is required — some rows only populate `category_primary` (e.g. tea rooms whose
+`basic_category` is `non_alcoholic_beverage_venue`), so an `and` would drop them.
 
 ---
 
-## Open questions we'll resolve from the data
+## 2. Why name excludes are banned
 
-- **Chains (Starbucks, Dunkin, etc.):** kept IN for v1 — a sit-down Starbucks is
-  exactly what many moms want. We can add an optional chain toggle later (same
-  `brand_wikidata` approach noted in the Restaurants dev plan) if you'd rather show
-  only independent cafes.
-- **Bakery-cafes (Panera-style):** currently NOT excluded by name, but if they're
-  tagged `bakery`/`patisserie` they may not appear. We'll decide include vs. exclude
-  once we see how your data tags them.
-- **Confidence floor:** starts at `0.0`. After we see the results we'll likely raise
-  it (Restaurants landed on `0.7`) — but only once we confirm it isn't dropping real
-  cafes.
-- **Dedup:** OFF for now; we'll turn it ON (or move to name+address dedup) after
-  seeing how many duplicate rows show up.
+This is a USA-wide product. A name token that looks safe in one town silently deletes
+real cafes in another. Proof from the actual samples:
+
+| Tempting name token | Who it was meant to drop | Who it ALSO kills (real cafes) |
+|---|---|---|
+| `*market*` | "Streetside Market" (FL) | **Corner Market Kitchen** (SJ), any "Market St Coffee" nationwide |
+| `Sunoco` / `Citgo` / `APlus` | gas-station coffee (FL) | nothing locally, but it's an infinite, unwinnable list of gas brands |
+| `nutrition` | "Powerful Nutrition" club (SJ) | any "Nutrition Cafe" |
+
+There is no finite name list for a 50-state dataset. Names are out.
 
 ---
 
-## Next step
+## 3. Why category excludes are ALSO out (the key finding)
 
-Apply v1, then paste the result HTML here. I'll calibrate the `basic_category` gate,
-trim the leaks, set the confidence floor, and produce a v2 (and a formatted `.docx`
-like the Restaurants one).
+The obvious next move is excluding `category_alternate` junk like `bubble_tea` or
+`smoothie_juice_bar`. **Your San Jose data proves this backfires** — those alternates
+ride on legitimate, popular coffee shops:
+
+| Alternate you'd exclude | Junk it removes | Real cafés it would WRONGLY delete |
+|---|---|---|
+| `bubble_tea` | boba counters | **Nirvana Soul Coffee** (0.99), **Dr.ink** (0.98), **Cafe Boba**, **Chun Yang Tea** |
+| `smoothie_juice_bar` | Protein Harbor, Powerful Nutrition | **Voyager Craft Coffee HQ**, **Cowboy Coffee**, **Jack Cafe** |
+| `donuts` / `fast_food_restaurant` | — | **every Dunkin'** (all carry these) |
+| `restaurant` | — | Starbucks, Peet's, Cool Beans, half the list |
+
+Every category-based exclude removes more signal than noise. So we don't use them.
+
+---
+
+## 4. The one real, name-free knob you can choose
+
+The only defensible lever is **whether to include `tea_room` at all**:
+
+- **Option A — Coffee + Tea (current):** keep `tea_room`. You also pull in bubble-tea /
+  boba counters, because Overture tags boba shops as `tea_room` with no sub-distinction.
+- **Option B — Coffee-only:** drop `tea_room` from both include boxes. Removes ~all boba
+  counters wholesale (clean, nationwide), but also drops genuine tea rooms (Exhale Tea
+  in OH, Olas African Coffee & Tea) and a few roasteries tagged tea.
+
+This is a product call, not a data-quality fix. Pick one. Default is **A** (broad).
+
+---
+
+## 5. Residual noise this filter can't fix (needs data enrichment)
+
+These leak in every metro and **cannot** be removed by any category/name boolean —
+they need enrichment flags, exactly like the Restaurants P-series:
+
+| Problem | Examples in your samples | Needed flag |
+|---|---|---|
+| In-store coffee counters | WFM Coffee Bar (Whole Foods), Nordstrom Ebar, Nespresso @ Macy's, Teavana (SJ) | `is_in_store_concession` |
+| Gas-station coffee | APlus at Sunoco (FL) | `is_fuel_station` |
+| Drive-through-only | 7 Brew (FL) | `is_drive_through_only` |
+| Nutrition/herbalife clubs | Powerful Nutrition, Protein Harbor | `is_nutrition_club` |
+| Same brand, many addresses | Starbucks dupes, Daily Grind ×2 | dedup by (name+address) — P4 |
+
+See the [Dev team section in restaurants.md](restaurants.md#dev-team-what-to-improve-next).
+Until those flags exist, the category gate above is the correct, honest ceiling.
+
+---
+
+## Appendix A — config history
+
+- **v0 (broken):** `basic_category = cafe` + heavy excludes + conf `0.7`. **0 results** —
+  wrong `basic_category` (data uses `coffee_shop`).
+- **v1 (discovery):** broad primary includes, no gate.
+- **v2 (name-exclude attempt — rejected):** added `*market*` / gas-brand name tokens and
+  `smoothie_juice_bar` / `donuts` category excludes. Rejected: name tokens aren't
+  USA-safe, and category excludes delete real cafes (Nirvana Soul, every Dunkin').
+- **v2 (current, shippable):** `coffee_shop` + `tea_room` + `coffee_roastery` includes,
+  query `basic_category_include or category_primary_include`, **no excludes**, dedup ON.
+  Validated across FL/OH/CA/NV-UT. Residual cleanup deferred to enrichment flags.
