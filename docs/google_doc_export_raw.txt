@@ -1,0 +1,304 @@
+﻿Hospital POIs
+Admin Panel Entries
+Saved filter metadata (example)
+Field
+	Value
+	Saved filter name
+	Hospital (or your chosen label)
+	Latitude, Longitude
+	(user/search pin — not part of the static preset)
+	Distance (miles)
+	(product default, e.g. 30)
+	Max results
+	(e.g. 250)
+	Min confidence
+	(empty / 0–1 per your UI)
+	Address, City, State, Zipcode, Operating status
+	(empty)
+	Website
+	Any
+	________________
+
+
+Business name primary (include)
+(empty)
+Business name common (include)
+(empty)
+________________
+
+
+Business name primary (exclude)
+Business name common (exclude)
+(identical in both)
+veterinary
+veterinarian
+animal hospital
+pet hospital
+urgent care
+immediate care
+express care
+walk-in clinic
+walk in clinic
+minute clinic
+convenient care
+retail clinic
+telehealth
+dental
+dentist
+orthodont
+endodont
+oral surgery
+chiropract
+acupuncture
+med spa
+medspa
+plastic surgery
+cosmetic surgery
+bariatric center
+weight loss center
+fertility
+ivf
+dialysis
+sleep center
+sleep medicine
+insomnia
+pain management clinic
+imaging center
+radiology center
+mri
+ct scan
+laboratory
+blood draw
+plasma
+blood donation
+surgery center
+surgical center
+ambulatory surgery
+outpatient surgery
+endoscopy center
+chemotherapy
+radiation oncology
+cancer center
+oncology center
+cardiology office
+orthopedic clinic
+ent clinic
+eye clinic
+vision center
+hearing aid
+audiology
+physical therapy
+rehabilitation
+substance abuse
+detox
+psychiat
+mental health clinic
+counseling center
+hospice
+nursing home
+skilled nursing
+assisted living
+memory care
+long term care
+home health
+pharmacy
+drugstore
+surgical specialists
+suite
+healthcare specialist
+trauma surgeons
+physicians group
+physician group
+(Keep the suite line exactly as you had it if your matcher relies on that trailing space.)
+________________
+
+
+Basic category (include)
+hospital
+Basic category (exclude)
+(empty)
+________________
+
+
+Category primary (include)
+hospital
+emergency_room
+medical_center
+Category primary (exclude)
+(empty)
+________________
+
+
+Category alternate (include)
+emergency_room
+medical_center
+Category alternate (exclude)
+urgent_care
+walk_in
+walk-in
+clinic
+doctor
+health_clinic
+family_practice
+primary_care
+pediatric_clinic
+dentist
+dental
+orthodont
+chiropract
+acupuncture
+tattoo_and_piercing
+dog_park
+event_planning
+charity_organization
+community_services_non_profits
+sleep_specialist
+cancer_treatment_center
+dialysis_center
+imaging_center
+radiology_center
+laboratory
+laboratory_testing
+outpatient
+ambulatory
+hospice
+nursing
+assisted_living
+rehab
+rehabilitation
+mental_health
+counseling
+therapy
+surgical_center
+________________
+
+
+Taxonomy primary (include / exclude)
+(empty)
+Taxonomy alternates (include / exclude)
+(empty)
+________________
+
+
+Query builder (final expression)
+name_primary_exclude and name_common_exclude and basic_category_include and category_primary_include and category_alternate_include and category_alternate_exclude
+Note: If your app renames tokens when you click Generate Query, keep your app’s official token names and only preserve the same boolean structure as above.
+________________
+
+
+Known limitation (for your dev doc, not the admin UI)
+Rows like Cleveland Clinic Martin South Hospital can have category_alternate empty and will not match category_alternate_include until you add acute_hospital_er_capable (or similar) per your backend plan.
+
+
+Dev brief: hospitals POI — dedupe, under-tags, new fields, evaluation
+1) Goals
+* Dedupe: one user-facing pin per same physical site (not “same health system”).
+* Under-tags: include real acute hospitals when Overture has category_alternate empty but the site is still a hospital (e.g. Martin South).
+* Nationwide: avoid city/name whitelists; prefer DB-owned fields + optional external verification.
+________________
+
+
+2) Dedupe rules (implement + test)
+* Merge candidates only if normalized street address matches (number + street + unit rules + city + state; normalize St/Street, etc.) OR haversine distance ≤ 50–100 m and same operator/brand if available.
+* Do not merge different addresses (e.g. main hospital vs freestanding ER miles away).
+* Do merge obvious duplicates: same address/coords “Hospital” + “Emergency Department” rows.
+* Output: canonical_poi_id (or keep one row, mark others duplicate_of_id).
+________________
+
+
+3) New DB columns (minimum)
+Column
+	Type
+	Purpose
+	acute_hospital_er_capable
+	boolean
+	Filterable “should show in ER hospital layer”
+	acute_hospital_source
+	enum
+	unknown / overture_tagged / inferred_internal / verified_external / manual_override
+	acute_hospital_updated_at
+	timestamp
+	Audit
+	(optional) acute_hospital_evidence
+	json/text
+	Why (matched CMS id, OSM id, rule id)
+	Filter/query change: keep current Overture-driven logic OR acute_hospital_er_capable = true (exact shape depends on your query builder).
+________________
+
+
+4) Population pipeline (cron/batch)
+Step A — classify overture_tagged (cheap)
+If existing fields already satisfy your strict rule (e.g. alternate contains emergency_room / medical_center without denylist hits), set:
+* acute_hospital_er_capable = true
+* acute_hospital_source = overture_tagged
+Step B — verified_external (preferred for fixes like Martin South)
+Match POI → external record(s) with documented match keys (name + address + distance threshold + optional brand). On confident match that indicates ED/acute hospital, set:
+* acute_hospital_er_capable = true
+* acute_hospital_source = verified_external
+* store evidence ids in acute_hospital_evidence
+Step C — inferred_internal (fallback, conservative)
+Only when not overture_tagged and not verified_external, consider rules such as:
+* basic_category/category_primary indicates hospital AND
+* category_alternate is null/empty AND
+* confidence ≥ tuned threshold AND
+* business name not hit short denylist AND
+* if alternates exist, must not hit alternate denylist
+Set inferred_internal + boolean; log all true positives/false positives for review.
+Step D — manual overrides
+Rare corrections via admin only; manual_override wins in merge order.
+Processing order: manual_override > verified_external > overture_tagged > inferred_internal > else false/unknown.
+________________
+
+
+5) Evaluation (must ship with metrics)
+Build a labeled set (start with 200–500 pins across ≥5 metros): each nearby hospital POI = keep/drop for “ER-capable acute hospital layer”.
+Track per run:
+* Precision@N / FP rate in top results
+* Recall vs labeled “must show” list (include Martin South–type cases)
+* Counts by acute_hospital_source
+* Table QA: top FPs by category_alternate, taxonomy, confidence, name token hits
+Release gate: FP regression budget (e.g. “no more than X FP per 100 pins”) + no loss of labeled must-shows.
+________________
+
+
+6) Benchmark table example (Treasure Coast pin — document expected outcomes)
+Expected facility (reference)
+	Overture / filter behavior
+	Action
+	HCA Lawnwood
+	Passes strict tags
+	overture_tagged
+	Cleveland Clinic Indian River
+	Passes strict tags
+	overture_tagged
+	St Lucie (Tiffany)
+	Passes strict tags
+	overture_tagged
+	Darwin Square freestanding ER
+	Different address; passes if product wants
+	overture_tagged (or separate product category)
+	Tradition + Tradition ED
+	Same site duplicate
+	Dedupe to one canonical
+	Martin North
+	Passes strict tags
+	overture_tagged
+	Sebastian River (13695 US-1)
+	Passes strict tags
+	overture_tagged
+	Florida Coast (new)
+	Missing in Overture snapshot
+	Data refresh / external verify when appears
+	Martin South (Salerno)
+	In DB; empty category_alternate → dropped by strict filter
+	verified_external or inferred_internal → acute_hospital_er_capable=true
+	________________
+
+
+7) What to deliver (checklist)
+*  Dedupe job + tests (same-address ED duplicates)
+*  Migration adding columns + backfill job
+*  External matcher v1 + match confidence threshold + logging
+*  Internal inferencer v0 (conservative) + kill switch
+*  Query updated to OR in acute_hospital_er_capable
+*  Evaluation notebook/SQL report + labeled set maintained in repo

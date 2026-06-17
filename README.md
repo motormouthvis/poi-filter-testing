@@ -18,6 +18,21 @@ which places show up in each category.
   include/exclude logic works, the `PoiDetail` data model).
 - [`docs/filters/restaurants.md`](docs/filters/restaurants.md) — a worked example
   filter for the **Restaurants** category (work in progress).
+- [`docs/POI_FILTER_TESTING_CLEAN.md`](docs/POI_FILTER_TESTING_CLEAN.md) — hospital
+  filter preset, dev brief, and benchmark (session notes).
+
+## Keep local and GitHub in sync
+
+From the repo root:
+
+```powershell
+.\scripts\sync.ps1
+```
+
+That script **pulls** latest from `origin/main`, then **commits and pushes** any local
+changes so this folder and
+[github.com/motormouthvis/poi-filter-testing](https://github.com/motormouthvis/poi-filter-testing)
+stay aligned.
 
 ## TL;DR
 

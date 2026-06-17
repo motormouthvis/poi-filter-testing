@@ -64,6 +64,23 @@ Values are entered one-per-line (also accepts comma/semicolon separation).
 >   any `*_restaurant`) appears in that list, an include on `restaurant` will pull
 >   the record in even if it's really a store/service.
 
+### Match operators (per term)
+
+Default is **contains**. You can also anchor with `"`/`*`:
+
+| You type | Means | Example match |
+|---|---|---|
+| `publix` | contains (substring) | `super publix store` |
+| `"publix"` | exact match | only `publix` |
+| `publix*` | starts with | `publix pharmacy` |
+| `*publix` | ends with | `the publix` |
+| `*publix*` | contains anywhere | `mypublix1` |
+
+Use **exact** (`"…"`) or anchored forms when a bare token would hit the wrong
+substring (e.g. `bar` also matches `barbecue_restaurant`). Note: for **list**
+fields like `category_alternate`, prefer plain contains — exact `"…"` can fail to
+match a single item inside a comma-separated list.
+
 | Field | Include param | Exclude param |
 |---|---|---|
 | Business name primary | `name_primary_include_values` | `name_primary_exclude_values` |

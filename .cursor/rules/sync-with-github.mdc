@@ -1,0 +1,13 @@
+---
+description: Keep poi-filter-testing in sync with GitHub at all times
+alwaysApply: true
+---
+
+# Git sync (poi-filter-testing)
+
+This repo must stay aligned with https://github.com/motormouthvis/poi-filter-testing.
+
+- **Start of work:** run `git pull --ff-only origin main` (or `.\scripts\sync.ps1` before editing if you will push).
+- **End of work / after file changes:** run `.\scripts\sync.ps1` so all files are committed and pushed.
+- Do not leave untracked project files in this repo; add and push them.
+- Only `.gitignore` exclusions (secrets, caches) stay local — not arbitrary doc or script files.
