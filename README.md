@@ -19,9 +19,9 @@ which places show up in each category.
 - [`docs/filters/restaurants.md`](docs/filters/restaurants.md) — **Restaurants**
   filter (v3, shippable).
 - [`docs/filters/cafes.md`](docs/filters/cafes.md) — **Cafes** filter (v3, in validation).
-- [`data/cafe_filter_examples/`](data/cafe_filter_examples/) — **1,600+ unique POI rows**
-  from USA validation batches (CSV + JSON); regenerate with
-  `python scripts/extract_cafe_examples.py`.
+- [`data/coffee_tea_raw/`](data/coffee_tea_raw/) — **raw coffee/tea category pull**
+  (unfiltered analysis base; CSV + JSON); regenerate with
+  `python scripts/build_coffee_tea_db.py`.
 - [`docs/POI_FILTER_TESTING_CLEAN.md`](docs/POI_FILTER_TESTING_CLEAN.md) — hospital
   filter preset, dev brief, and benchmark (session notes).
 
