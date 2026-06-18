@@ -18,8 +18,10 @@ which places show up in each category.
   include/exclude logic works, the `PoiDetail` data model).
 - [`docs/filters/restaurants.md`](docs/filters/restaurants.md) — **Restaurants**
   filter (v3, shippable).
-- [`docs/filters/cafes.md`](docs/filters/cafes.md) — **Cafes** filter (v2, working — 22
-  results at Fort Pierce test pin).
+- [`docs/filters/cafes.md`](docs/filters/cafes.md) — **Cafes** filter (v3, in validation).
+- [`data/cafe_filter_examples/`](data/cafe_filter_examples/) — **1,600+ unique POI rows**
+  from USA validation batches (CSV + JSON); regenerate with
+  `python scripts/extract_cafe_examples.py`.
 - [`docs/POI_FILTER_TESTING_CLEAN.md`](docs/POI_FILTER_TESTING_CLEAN.md) — hospital
   filter preset, dev brief, and benchmark (session notes).
 
