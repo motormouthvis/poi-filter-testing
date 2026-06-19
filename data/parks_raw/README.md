@@ -36,7 +36,7 @@ python scripts/scrape_parks.py --pin "27.4945,-80.3382" --label test # single pi
 python scripts/analyze_parks.py                                      # summary stats
 ```
 
-Current snapshot: **24,543 unique POIs** across 138 of 142 pins (51 states + DC).
+Current snapshot: **25,187 unique POIs** across all 142 pins (51 states + DC; the 4 dense metros were backfilled at 1 mi).
 The 4 densest metros (`new_york_ny`, `brooklyn_ny`, `los_angeles_ca`, `chicago_il`)
 returned a server-side **503** on the 10-mile parks query (the spatial scan exceeds
 the staging gateway's ~30s timeout for very dense areas) and were skipped; all 51

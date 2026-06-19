@@ -1,8 +1,8 @@
 # Filter: Parks
 
-> **Status: v1 (proposed) — evidence-based draft from a 24,543-row raw pull.**
-> Built from `data/parks_raw/` (138 of 142 national pins; 51 states + DC).
-> Generic USA — no one-off local business names.
+> **Status: v1 (proposed) — evidence-based draft from a 25,187-row raw pull.**
+> Built from `data/parks_raw/` (all 142 national pins; 51 states + DC — the 4 dense
+> metros were backfilled at 1 mi, see §5). Generic USA — no one-off local names.
 
 **Goal:** surface real **public parks & green spaces** a family would visit —
 neighborhood/city/state/national parks, playgrounds, dog parks, botanical and
@@ -106,11 +106,11 @@ All other include/exclude boxes: **empty**. Validated effect: 24,543 → ~14,139
 
 | Metric | Value |
 |---|---|
-| Unique POIs | **24,543** |
-| Pins | 138 of 142 (4 mega-metros 503'd — see §5) |
+| Unique POIs | **25,187** |
+| Pins | all 142 (4 dense metros backfilled at 1 mi — see §5) |
 | States + DC | **51** |
-| Has website | 17,339 (70%) · none 7,204 (29%) |
-| Confidence | `<0.5` 2,766 · `0.5–0.7` 3,152 · `0.7–0.9` 9,116 · `≥0.9` 9,509 |
+| Has website | 17,862 (70%) · none 7,325 (29%) |
+| Confidence | `<0.5` 2,893 · `0.5–0.7` 3,200 · `0.7–0.9` 9,428 · `≥0.9` 9,666 |
 
 Top `basic_category`: `park` 12,395 · **`parking` 5,861** · `hardware_home_and_garden_store` 1,808 ·
 `housing_or_property_service` 674 · `home_service` 647 · `amusement_park` 646 ·
@@ -319,20 +319,25 @@ quality gate in the widget so curators can revisit borderline rows.
 
 ---
 
-## 5. Data-collection caveat (staging 503s)
+## 5. Data-collection caveat (staging 503s) — RESOLVED
 
 The 4 densest metros — `new_york_ny`, `brooklyn_ny`, `los_angeles_ca`,
 `chicago_il` — returned a server-side **503 after ~30s** on the 10-mile parks
-query. Diagnosed: it is the **spatial radius**, not the tokens —
-NYC returns 200 rows in 5.6s at **1 mi** but 503s at **3 mi** and **10 mi**, even
-with a `park`-only query. Parks are far denser in raw Overture than coffee shops,
-so the 10-mile scan in those metros exceeds the staging gateway timeout. All
-other 138 pins succeeded and **all 51 states + DC are still represented**, so the
-analysis above is national. To capture the missing metros, re-run those pins at a
-smaller radius (1–2 mi) once, e.g.:
+query. Diagnosed: it is the **spatial radius**, not the tokens — NYC returns 200
+rows in 5.6s at **1 mi** but 503s at **3 mi** and **10 mi**, even with a `park`-only
+query. Parks are far denser in raw Overture than coffee shops, so the 10-mile scan
+in those metros exceeds the staging gateway timeout.
+
+**Backfilled:** these 4 pins were re-pulled at **1 mi** and merged into the master
+(+644 rows → 25,187 total). NYC and Chicago still hit the 200/pin cap at 1 mi, so
+they remain truncated by design (more parks exist there), but every metro is now
+represented. Reproduce:
 
 ```
 python scripts/scrape_parks.py --pin "40.7128,-74.0060" --label new_york_ny --distance 1
+python scripts/scrape_parks.py --pin "40.6782,-73.9442" --label brooklyn_ny --distance 1
+python scripts/scrape_parks.py --pin "34.0522,-118.2437" --label los_angeles_ca --distance 1
+python scripts/scrape_parks.py --pin "41.8781,-87.6298" --label chicago_il --distance 1
 ```
 
 ---
