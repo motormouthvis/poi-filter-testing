@@ -45,20 +45,20 @@ outlet_mall
 strip_mall
 ```
 
-**Business name primary — exclude:**
+**Business name primary — exclude** (plain = contains; a leading `*` is stripped on save — see admin-filter-builder.md):
 
 ```
-*food court*
-*parking*
-*self storage*
-*business park*
-*business plaza*
-*office park*
-*medical center*
-*medical plaza*
-*professional plaza*
-*professional building*
-*industrial park*
+food court
+parking
+self storage
+business park
+business plaza
+office park
+medical center
+medical plaza
+professional plaza
+professional building
+industrial park
 ```
 
 **Query builder:**

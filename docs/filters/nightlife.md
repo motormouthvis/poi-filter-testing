@@ -37,20 +37,26 @@ bar
 nightlife
 ```
 
-**Category primary — include** (ends-with anchors are essential — bare `bar`/`pub`
-pull `barber`/`barbecue`/`notary_public`):
+**Category primary — include:** ⚠️ ends-with anchors (`*bar`/`*pub`) do **NOT**
+work — the admin strips a leading `*` on save, collapsing `*pub` → `pub`
+(contains), which then matches `public_*` (gov/schools/publishers). Use `"pub"`
+**exact** + explicit `gastropub`/`brewpub`; `bar` stays contains and the
+over-reach is cleaned with excludes below:
 
 ```
-*bar
+bar
 night_club
 nightclub
-*pub
+"pub"
+gastropub
+brewpub
 lounge
 brewery
 karaoke
 ```
 
-**Category primary — exclude** (food/dessert `*bar` noise):
+**Category primary — exclude** (food/dessert `bar` noise + `bar`/`pub`
+contains over-reach):
 
 ```
 smoothie_juice_bar
@@ -62,7 +68,16 @@ oyster_bar
 raw_bar
 snack_bar
 candy_bar
+restaurant
+barber
+bartender
 ```
+
+> `restaurant` removes `bar_and_grill_restaurant` / `barbecue_restaurant` that
+> bare `bar` (contains) drags in; `barber` removes barber shops; `bartender`
+> removes the bartending-service category. Verified live: without these, a Denver
+> test pulled 109 `public_and_government_association` rows (City Hall, DMV,
+> schools) plus barber/BBQ venues.
 
 **Query builder:**
 
@@ -73,7 +88,8 @@ candy_bar
 All other include/exclude boxes: **empty**. No name excludes needed (noise here is
 a clean category signal). Optional product call: add `hookah_bar` and
 `airport_lounge` to the category-primary exclude list to drop hookah/vape and
-airside lounges.
+airside lounges. (`irish_pub`, `dive_bar`, `wine_bar`, etc. are still kept — they
+arrive via `basic_category = bar`.)
 
 > **Deferred (requires dev):** the precise quality gate `confidence < 0.7 AND no
 > website` (~1,234 rows) needs a compound rule the admin doesn't support. Don't set

@@ -72,13 +72,13 @@ bank
 > substring-match `wholesale_grocer` and delete **Costco, BJ's, Sam's Club**.
 > Distribution depots are removed by name instead (below).
 
-**Business name primary — exclude:**
+**Business name primary — exclude** (plain = contains; a leading `*` is stripped on save — see admin-filter-builder.md):
 
 ```
-*Distribution Center*
-*Grocery Pickup*
-*Pickup & Delivery*
-*Pickup and Delivery*
+Distribution Center
+Grocery Pickup
+Pickup & Delivery
+Pickup and Delivery
 ```
 
 **Query builder:**

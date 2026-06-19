@@ -61,15 +61,15 @@ golf_instructor
 dance_school
 ```
 
-**Business name primary — exclude:**
+**Business name primary — exclude** (plain = contains; a leading `*` is stripped on save — see admin-filter-builder.md):
 
 ```
-*physical therapy*
-*chiropract*
-*country club*
-*golf academy*
-*swim academy*
-*swim school*
+physical therapy
+chiropract
+country club
+golf academy
+swim academy
+swim school
 ```
 
 **Query builder:**

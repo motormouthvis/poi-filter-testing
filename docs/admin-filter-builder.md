@@ -81,6 +81,24 @@ substring (e.g. `bar` also matches `barbecue_restaurant`). Note: for **list**
 fields like `category_alternate`, prefer plain contains — exact `"…"` can fail to
 match a single item inside a comma-separated list.
 
+> ⚠️ **VERIFIED SAVE BEHAVIOR (2026-06-19): a leading `*` is stripped when a
+> filter is saved.** Tested by round-tripping saved `PoiFilter` records:
+>
+> | You enter | Stored as | Effective meaning |
+> |---|---|---|
+> | `*catering*` | `catering*` | **starts-with** (NOT contains!) |
+> | `*bar` | `bar` | **contains** (NOT ends-with!) |
+> | `catering` | `catering` | contains ✓ |
+> | `catering*` | `catering*` | starts-with ✓ |
+> | `"pub"` | `"pub"` | exact ✓ |
+>
+> **Practical rule for saved filters:** only **plain** (contains), **`x*`**
+> (starts-with), and **`"x"`** (exact) survive. **Ends-with (`*x`) and
+> leading-`*` contains (`*x*`) are NOT expressible** — they silently degrade.
+> Use plain tokens for "contains", and clean any substring over-reach with
+> excludes (e.g. nightlife uses `"pub"` exact + excludes `restaurant`/`barber`/
+> `bartender` because plain `pub`/`bar` would pull `public_*`/`barber`/etc.).
+
 | Field | Include param | Exclude param |
 |---|---|---|
 | Business name primary | `name_primary_include_values` | `name_primary_exclude_values` |

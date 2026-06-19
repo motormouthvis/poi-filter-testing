@@ -75,12 +75,12 @@ grocery_store
 supermarket
 ```
 
-**Business name primary — exclude:**
+**Business name primary — exclude** (plain = contains; a leading `*` is stripped on save — see admin-filter-builder.md):
 
 ```
-*catering*
-*food truck*
-*taco truck*
+catering
+food truck
+taco truck
 chevron
 shell
 exxon
