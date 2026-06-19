@@ -16,6 +16,48 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA = REPO_ROOT / "data"
 
+# --- Hospitals v2 (precision-first) shared exclude lists ---------------------
+# category_alternate tags that mark a physician office / specialty clinic / admin
+# rather than a 24-hr ER hospital. Each token was verified against the raw data to
+# have ~0% co-occurrence with an emergency_room signal (tune_hospital_v2.py).
+_HOSP_ALT_EXCLUDE = [
+    "veterinarian", "pets", "pet_services",
+    "doctor", "family_practice", "internal_medicine",
+    "oncologist", "cardiologist", "pediatrician",
+    "obstetrician_and_gynecologist", "womens_health_clinic",
+    "prenatal_perinatal_care", "nurse_practitioner",
+    "surgical_center", "cancer_treatment_center", "sleep_specialist",
+    "physical_therapy", "rehabilitation_center", "abuse_and_addiction_treatment",
+    "counseling_and_mental_health", "naturopathic_holistic",
+    "public_health_clinic", "public_and_government_association",
+    "public_service_and_government", "social_service_organizations",
+    "community_services_non_profits", "retirement_home",
+    "laboratory_testing", "pharmacy", "diagnostic_imaging",
+    "medical_research_and_development", "b2b_medical_support_services",
+    "business_to_business", "professional_services", "education",
+    "college_university", "hotel", "shopping",
+]
+# Specialist / admin name tokens (contains-match) for rows with no distinguishing
+# category_alternate tag. None of these appear in a real acute-care hospital name.
+_HOSP_NAME_EXCLUDE = [
+    "urgent care", "walk-in", "walk in", "immediate care", "express care",
+    "dental", "dentist", "orthodont", "veterinar", "animal hospital",
+    "rehab", "recovery", "behavioral", "mental health", "psychiat",
+    "detox", "hospice", "nursing home", "skilled nursing", "assisted living",
+    "dialysis", "imaging", "radiology", "pharmacy", "med spa", "medspa",
+    "chiropract", "physical therapy", "occupational therapy",
+    "surgery center", "surgical center", "endoscopy", "eye clinic",
+    "vision center", "std clinic", "free clinic", "wellness center",
+    # v2 additions: specialty offices / clinics / admin
+    "specialist", "multispecialty", "consultants", "primary care",
+    "family medicine", "internal medicine", "medical management",
+    "health department", "nephrology", "gastroenterology",
+    "cardiovascular", "cardiology", "dermatology", "orthopedic",
+    "orthopaedic", "oncology", "urology", "podiatry", "neurology",
+    "pulmonology", "rheumatology", "fertility", "weight loss",
+    "cancer care", "cancer center", "therapy",
+]
+
 # name -> config. `name` becomes the saved_filter_name (the "-cursor" tag set).
 FILTERS: dict[str, dict] = {
     "gym-cursor": {
@@ -114,32 +156,21 @@ FILTERS: dict[str, dict] = {
         "min_confidence": "0.7",
         "operating_status": "open",
         "has_website": "",
-        "show_duplicates": True,
+        # NOTE: the admin checkbox is named show_duplicates; UNCHECKED = dedupe by
+        # address (keep highest-confidence per address). So False == dedupe ON.
+        "show_duplicates": False,
         "basic_category_include": ["hospital"],
         "category_primary_include": ["hospital", "emergency_room"],
         "category_primary_exclude": ["animal", "pet", "hospitalist", "equipment"],
-        "category_alternate_exclude": ["veterinarian", "pets"],
-        "name_primary_exclude": [
-            "urgent care", "walk-in", "walk in", "immediate care", "express care",
-            "dental", "dentist", "orthodont", "veterinar", "animal hospital",
-            "rehab", "recovery", "behavioral", "mental health", "psychiat",
-            "detox", "hospice", "nursing home", "skilled nursing", "assisted living",
-            "dialysis", "imaging", "radiology", "pharmacy", "med spa", "medspa",
-            "chiropract", "physical therapy", "occupational therapy",
-            "surgery center", "surgical center", "endoscopy", "eye clinic",
-            "vision center", "std clinic", "free clinic", "wellness center",
-        ],
+        # v2 precision-first: alternate tags that mark a physician office / specialty
+        # clinic / admin (NOT a 24-hr ER hospital). Tuned from raw data so each token
+        # has ~0% co-occurrence with an emergency_room signal (see tune_hospital_v2.py).
+        # Deliberately NOT excluded (high ER%): medical_center, medical_service_organizations,
+        # health_and_medical, ambulance_and_ems_services, diagnostic_services, urgent_care_clinic.
+        "category_alternate_exclude": _HOSP_ALT_EXCLUDE,
+        "name_primary_exclude": _HOSP_NAME_EXCLUDE,
         # name_common_exclude mirrors name_primary_exclude per the doc
-        "name_common_exclude": [
-            "urgent care", "walk-in", "walk in", "immediate care", "express care",
-            "dental", "dentist", "orthodont", "veterinar", "animal hospital",
-            "rehab", "recovery", "behavioral", "mental health", "psychiat",
-            "detox", "hospice", "nursing home", "skilled nursing", "assisted living",
-            "dialysis", "imaging", "radiology", "pharmacy", "med spa", "medspa",
-            "chiropract", "physical therapy", "occupational therapy",
-            "surgery center", "surgical center", "endoscopy", "eye clinic",
-            "vision center", "std clinic", "free clinic", "wellness center",
-        ],
+        "name_common_exclude": _HOSP_NAME_EXCLUDE,
         "query_builder": "(basic_category_include or category_primary_include) and category_primary_exclude and category_alternate_exclude and name_primary_exclude and name_common_exclude",
     },
     "cafe-cursor": {

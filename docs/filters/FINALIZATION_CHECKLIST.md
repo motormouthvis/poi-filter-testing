@@ -5,7 +5,7 @@ Legend: ✅ finalized · 🔄 in review · ⬜ not started
 
 | Category | Production filter | Status | Notes |
 |---|---|---|---|
-| **Hospitals** | `hospital-cursor` (id 434) | 🔄 chosen, pending sign-off | Beat `Hospital` (id 67) decisively — see below |
+| **Hospitals** | `hospital-cursor` (id 434, **v2**) | 🔄 v2 live, pending sign-off | v1 had a precision hole (Overture mislabels doctor offices as `hospital`); v2 fixes it — see below |
 | Cafes | `cafe-cursor` (id 435) | ⬜ | built + validated, not yet head-to-head vs `Cafe` |
 | Grocery | `grocery-cursor` (id 436) | ⬜ | built + validated, not yet head-to-head vs `Grocery` |
 | Restaurants | `restaurant-cursor` (id 437) | ⬜ | built + validated, not yet head-to-head vs `Restaurants` |
@@ -58,3 +58,44 @@ hospitals (Chicago 0 vs 25, Seattle 3 vs 84). `hospital-cursor` uses
 far better coverage. Reproduce: `python scripts/compare_hospital_filters.py`.
 
 **Open item:** re-test NYC once staging is stable (it timed out at 1mi for both).
+
+---
+
+## Hospitals — CORRECTION + v2 (2026-06-19, later)
+
+The "0 noise" verdict above was **measured wrong**: the comparison script classified
+a row as a real hospital whenever `category_primary = hospital`. But Overture tags a
+huge number of **physician offices, specialty clinics, health departments, and even
+unrelated businesses** as `category_primary = hospital`. Re-pulling the FL home pin
+(`27.49434…, -80.33809…`, 20mi) on `hospital-cursor` v1 returned **47 results, of which
+only ~13 (~28%) were genuine 24-hr ER hospitals** — the rest were doctor offices
+("Cardiovascular Consultants", "Vero Gastroenterology"), specialty clinics, health
+departments, a call center ("Teleperformance"), and a wax center ("Dr Christian Presutti").
+
+### v2 fix (precision-first, user-chosen)
+Root cause: name-excludes can't catch junk named like a business; the real signal is
+in **`category_alternate`**. Using `scripts/tune_hospital_v2.py` we measured, per
+alternate tag, its co-occurrence with an `emergency_room` signal and excluded only the
+~0%-ER tags (`doctor`, `family_practice`, `internal_medicine`, `surgical_center`,
+`public_and_government_association`, `laboratory_testing`, etc.) while **preserving**
+the ER-correlated tags (`medical_center`, `medical_service_organizations`,
+`ambulance_and_ems_services`, `diagnostic_services`). Added specialist name-excludes too.
+
+| Metric | v1 | v2 |
+|---|---|---|
+| Home pin (20mi) results | 47 | **17** |
+| ...genuine ER hospitals | ~13 | **14** |
+| ...precision | ~28% | **~82%** |
+| National ER-signal recall | — | **74.6%** (dropped = urgent care / surgery centers / vet ERs / hospital sub-depts — all correct) |
+
+Residual leaks at home pin: 3 (`Total Care Medical Centers`, `Cleveland Clinic Pointe
+West` walk-in, `Dr Christian Presutti`) — all have empty/generic `category_alternate`
+and innocuous names, i.e. no usable signal without the deferred confidence+website gate.
+
+**Dedupe caveat:** the `Deduplicate addresses` checkbox is **not honored when applying
+a saved filter** (same-address dups still returned regardless of the toggle). Flag for
+dev / widget plumbing.
+
+### Verdict (updated)
+**Adopt `hospital-cursor` v2.** Precision at the home pin jumped 28% → 82% with no loss
+of real acute-care hospitals. v2 is live on saved filter id 434.

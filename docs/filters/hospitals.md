@@ -1,8 +1,19 @@
 # Filter: Hospitals (24/7 Emergency Room)
 
-> **Status: v1 (draft) — evidence-based proposal from the raw category pull.**
+> **Status: v2 (precision-first) — live on saved filter `hospital-cursor` (id 434).**
 > Built from `data/hospitals_raw/` (21,720 unique POIs, 51 states, 142 pins).
 > Generic USA — no one-off local business names.
+>
+> **v2 change (2026-06-19):** `category_primary = hospital` in Overture is heavily
+> polluted with physician offices, specialty clinics, and admin (e.g. a call center
+> "Teleperformance", a wax center "Dr Christian Presutti" were both tagged hospital).
+> v1 returned 47 at the FL home pin with only ~28% being real ER hospitals. v2 adds
+> data-tuned `category_alternate` excludes (each token verified to have ~0%
+> co-occurrence with an `emergency_room` signal — see `scripts/tune_hospital_v2.py`)
+> plus specialist name excludes. Result at the home pin: **47 → 17, ~82% precision**,
+> all major hospitals + ERs retained. National ER-signal recall **74.6%** (the dropped
+> ER-signal rows are urgent cares, surgery centers, veterinary ERs, psych ERs, and
+> hospital sub-departments — all correctly excluded).
 
 **Goal:** surface **real hospitals with a 24-hour Emergency Room** — the kind you'd
 go to for an emergency (general acute-care hospitals, regional medical centers,
@@ -21,21 +32,21 @@ See [`../admin-filter-builder.md`](../admin-filter-builder.md) for field meaning
 
 ---
 
-## 0. Admin panel parameters (paste-ready, v1)
+## 0. Admin panel parameters (paste-ready, v2)
 
 Enter these in the PoiDetail filter builder. The compound quality gate is
 **deferred** (needs dev) — see note at the bottom.
 
 | Control | Value |
 |---|---|
-| Saved filter (Save as) | `Hospital` |
+| Saved filter | `hospital-cursor` (id 434) |
 | Latitude, Longitude | *(your test point)* |
 | Distance (miles) | `20` (use `1`–`5` in dense urban cores) |
 | Max results | `200` |
 | Min confidence | `0.7` — safe here; the `0.77` sentinel **survives** a `0.7` floor (see §5) |
 | Website | `Any` |
 | Operating status | `open` |
-| Deduplicate addresses | **ON** |
+| Deduplicate addresses | checkbox **unchecked** = dedupe on. **Caveat:** applying a *saved* filter does not appear to honor this toggle (same-address dups still returned) — flag for dev/widget plumbing. |
 
 **Basic category — include:**
 
@@ -59,11 +70,50 @@ hospitalist
 equipment
 ```
 
-**Category alternate — exclude:**
+**Category alternate — exclude** (v2 — physician-office / specialty-clinic / admin tags
+with ~0% ER co-occurrence; do **not** add `medical_center`, `medical_service_organizations`,
+`health_and_medical`, `ambulance_and_ems_services`, `diagnostic_services`, or `urgent_care_clinic`
+here — those carry real ER hospitals):
 
 ```
 veterinarian
 pets
+pet_services
+doctor
+family_practice
+internal_medicine
+oncologist
+cardiologist
+pediatrician
+obstetrician_and_gynecologist
+womens_health_clinic
+prenatal_perinatal_care
+nurse_practitioner
+surgical_center
+cancer_treatment_center
+sleep_specialist
+physical_therapy
+rehabilitation_center
+abuse_and_addiction_treatment
+counseling_and_mental_health
+naturopathic_holistic
+public_health_clinic
+public_and_government_association
+public_service_and_government
+social_service_organizations
+community_services_non_profits
+retirement_home
+laboratory_testing
+pharmacy
+diagnostic_imaging
+medical_research_and_development
+b2b_medical_support_services
+business_to_business
+professional_services
+education
+college_university
+hotel
+shopping
 ```
 
 **Business name primary — exclude** (also paste into **Business name common — exclude**):
@@ -106,6 +156,32 @@ vision center
 std clinic
 free clinic
 wellness center
+specialist
+multispecialty
+consultants
+primary care
+family medicine
+internal medicine
+medical management
+health department
+nephrology
+gastroenterology
+cardiovascular
+cardiology
+dermatology
+orthopedic
+orthopaedic
+oncology
+urology
+podiatry
+neurology
+pulmonology
+rheumatology
+fertility
+weight loss
+cancer care
+cancer center
+therapy
 ```
 
 **Query builder:**
