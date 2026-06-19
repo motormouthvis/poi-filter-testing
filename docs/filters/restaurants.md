@@ -1,70 +1,42 @@
-# Filter: Restaurants
+# Filter: Restaurants (sit-down / full-service)
 
-> **Status: WORKING (v3) — "good enough to ship for now."**
-> On the latest test (lat/lon `27.4612, -80.3035`, 5 mi) this config returns
-> **104 results**, down from **158** under v2. The worst noise is gone: the retail
-> seafood market (Pelican) is dropped by the confidence gate, name-based market
-> excludes catch grocery/fish/meat markets, and address dedup collapses true
-> duplicates. Remaining issues are **data-quality problems Overture can't express in
-> a boolean filter** — see [Dev team: what to improve next](#dev-team-what-to-improve-next).
+> **Status: v1 (draft) — evidence-based proposal from the raw category pull.**
+> Built from `data/restaurants_raw/` (28,019 unique POIs, 50 states + DC, 142 pins).
+> Generic USA — no one-off local business names.
 
-**Goal:** surface real sit-down / casual *restaurants* for the mom-centric
-home-shopper widget, while excluding fast food, drinking-focused venues (bars,
-breweries), cafes, bakeries, food trucks, retail food markets, and services.
+**Goal:** surface real **sit-down / full-service restaurants** — every cuisine
+type plus bar-and-grills. Excluded: fast food, food trucks / street vendors,
+coffee shops / cafes / bakeries (their own filters), bars / nightclubs /
+breweries / wineries (nightlife), caterers, food courts, and non-food businesses
+mislabeled as `restaurant` (gas stations, convenience stores, markets).
 
-This must be a **generic USA solution** — no hardcoded business names or
-locale-specific hacks. Every rule below is a general signal, not a Fort-Pierce patch.
-
-See [`../admin-filter-builder.md`](../admin-filter-builder.md) for what each field and
-the query tokens mean — including the important notes on **match operators**
-(`token` = contains, `"token"` = exact, `token*` = starts-with, `*token` = ends-with,
-`*token*` = contains-anywhere).
+See [`../admin-filter-builder.md`](../admin-filter-builder.md) for field meanings.
 
 ---
 
-## 1. The current working filter (v3) — copy/paste into the admin
+## 0. Admin panel parameters (paste-ready, v1)
 
-### Top controls
+Enter these in the PoiDetail filter builder. The compound quality gate is
+**deferred** (needs dev) — see note at the bottom.
 
-| Setting | Value |
+| Control | Value |
 |---|---|
-| Saved filter | `Restaurants` |
-| Distance | `5.0` miles |
-| Max results | `250` |
-| Min confidence | `0.7` |
+| Saved filter (Save as) | `Restaurants` |
+| Latitude, Longitude | *(your test point)* |
+| Distance (miles) | `10` (use `1`–`3` in dense urban cores) |
+| Max results | `200` |
+| Min confidence | `0.7` (kept — see §5; safely below the `0.77` sentinel) |
+| Website | `Any` |
 | Operating status | `open` |
-| Deduplicate addresses | **ON** (keep highest-confidence record per address) |
+| Deduplicate addresses | **ON** (collapses ~26% redundant rows — see §5) |
 
-### Include
-
-**Basic category (include):**
+**Basic category — include:**
 
 ```
 restaurant
 ```
 
-Leave **`Category primary (include)`** and **`Category alternate (include)`** EMPTY.
-The `basic_category = restaurant` gate does all the inclusion; the old broad
-category includes were the original source of the non-restaurant leak.
-
-### Exclude
-
-**Business name primary (exclude):**
-
-```
-taco truck
-food truck
-*market
-*market*
-supermarket
-grocery
-fish market
-meat market
-seafood market
-*tienda*
-```
-
-**Category primary (exclude):**
+**Category primary — exclude:**
 
 ```
 fast_food_restaurant
@@ -79,13 +51,15 @@ distillery
 winery
 caterer
 food_court
+cafeteria
 ```
 
-**Category alternate (exclude):**
+**Category alternate — exclude:**
 
 ```
 fast_food_restaurant
 food_truck
+street_vendor
 coffee_shop
 cafe
 bakery
@@ -95,144 +69,356 @@ distillery
 winery
 caterer
 food_court
+gas_station
+convenience_store
+grocery_store
+supermarket
 ```
 
-Leave the remaining exclude boxes (name common, basic category, taxonomy
-primary/alternates) empty.
+**Business name primary — exclude:**
+
+```
+*catering*
+*food truck*
+*taco truck*
+chevron
+shell
+exxon
+mobil
+marathon
+circle k
+7-eleven
+```
+
+**Query builder:**
+
+```
+basic_category_include
+  and category_primary_exclude
+  and category_alternate_exclude
+  and name_primary_exclude
+```
+
+All other include/exclude boxes: **empty**.
+
+> **Do NOT add a bare `bar` token to any category exclude box.** Substring
+> matching means `bar` also hits `bar_and_grill_restaurant` (900 rows),
+> `barbecue_restaurant` (678) and `salad_bar` (221) — deleting ~1,799 real
+> sit-down places. Nightlife is removed with the specific `nightclub` / `brewery`
+> / `distillery` / `winery` tokens instead. (In this dataset those primaries don't
+> even appear — they're defensive no-ops, see §3.)
+
+> **Deferred (requires dev):** a precise quality gate like `confidence < 0.5 AND
+> no website` (drops the unverifiable long tail without touching the `0.77`
+> sentinel band) cannot be expressed in the current admin builder, which offers
+> only a single numeric `min_confidence` plus a separate `has_website`. Until a
+> compound rule is supported, `min_confidence = 0.7` is the pragmatic choice
+> (see §5).
+
+---
+
+## 1. Dataset summary (raw pull)
+
+`python scripts/analyze_restaurants.py` on `data/restaurants_raw/restaurants_master.csv`:
+
+| Metric | Value |
+|---|---|
+| Total unique POIs | **28,019** |
+| States covered | **50 + DC** (+ a few dirty values, see note) |
+| Has website | 24,923 (88%) |
+| No website | 3,096 (11%) |
+
+**Top states:** TX 2,000 · CA 1,796 · FL 1,401 · NY 801 · OH 801 · CO 800 ·
+NC 800 · OR 800 · TN 800 · MI 799. (Most pins saturate the 200-row cap, so this
+is a broad geographic sample, not a full census.)
+
+> **Data hygiene note:** the `state` column also contains a handful of
+> non-standard values — `Calif`, `Mi`, and a few blanks — alongside the 50 USPS
+> codes + `DC`. The widget should normalize state strings; the underlying data is
+> not perfectly clean.
+
+**`basic_category` breakdown (complete):**
+
+| basic_category | count |
+|---|---|
+| `restaurant` | 25,822 |
+| `fast_food_restaurant` | 2,197 |
+
+> Note: we pulled `basic_category (include) = restaurant`, and substring matching
+> means **`fast_food_restaurant` is also pulled in** (it contains `restaurant`).
+> That's why 2,197 fast-food rows appear in the raw base — and exactly why the
+> production filter must exclude `fast_food_restaurant`.
+
+**`category_primary` breakdown (top 20):**
+
+| category_primary | count |
+|---|---|
+| `restaurant` (generic) | 3,669 |
+| `pizza_restaurant` | 2,426 |
+| `american_restaurant` | 2,401 |
+| `mexican_restaurant` | 2,303 |
+| `fast_food_restaurant` | 2,196 |
+| `italian_restaurant` | 1,007 |
+| `burger_restaurant` | 995 |
+| `bar_and_grill_restaurant` | 900 |
+| `seafood_restaurant` | 761 |
+| `sushi_restaurant` | 694 |
+| `chinese_restaurant` | 691 |
+| `barbecue_restaurant` | 678 |
+| `breakfast_and_brunch_restaurant` | 620 |
+| `steakhouse` | 592 |
+| `japanese_restaurant` | 571 |
+| `chicken_restaurant` | 500 |
+| `thai_restaurant` | 484 |
+| `taco_restaurant` | 395 |
+| `asian_restaurant` | 391 |
+| `salad_bar` | 221 |
+
+**Confidence distribution:**
+
+| Bucket | count | % |
+|---|---|---|
+| `<0.5` | 2,050 | 7% |
+| `0.5–0.7` | 1,160 | 4% |
+| `0.7–0.9` | 10,280 | 36% |
+| `>=0.9` | 14,529 | 51% |
+
+> **`0.77` is a sentinel default, not a real score.** 8,612 rows (**30%** of the
+> dataset) have `confidence` **exactly `0.77`** — including Chipotle, Denny's and
+> McDonald's. Any confidence floor set **at or above 0.78** would delete these
+> real chains. A `0.7` floor sits safely *below* the sentinel, so it keeps every
+> `0.77` record while trimming the genuinely low-confidence tail (see §5).
+
+---
+
+## 2. Include tokens used (raw pull)
+
+These are the tokens entered in `scripts/scrape_restaurants.py` (`CATEGORY_PARAMS`).
+The raw pull is intentionally wide — **includes only, no excludes, no confidence
+floor** — so the analysis sees everything `basic_category = restaurant` drags in.
+
+**Basic category (include):**
+
+```
+restaurant
+```
+
+**Query builder:**
+
+```
+(basic_category_include)
+```
+
+`min_confidence = 0`, `operating_status = open`, `max_results = 200`, all other
+boxes empty.
+
+---
+
+## 3. Observed noise / edge cases (evidence from the data)
+
+| Noise type | ~Count | Real examples from the data | Signal | Caught by |
+|---|---|---|---|---|
+| **Fast food** | 2,196 | `McDonald's`, `Chick-fil-A`, `Jack in the Box` | `category_primary = fast_food_restaurant` | `category_primary_exclude: fast_food_restaurant` |
+| **Caterers** (primary is a real `*_restaurant`, so a *primary* exclude misses them) | 120 by alt / 108 by name | `Parkers Soulfood and Catering` (cp=`restaurant`, alt=`caterer`), `Wing Out Events & Catering`, `Bridge Seafood Restaurant & Catering` | `caterer` in `category_alternate`; `catering` in name | `category_alternate_exclude: caterer` **+** `name_primary_exclude: *catering*` |
+| **Food trucks / street vendors** | ~57 by name, 1,622 with `fast_food` alt | `Bayou Bros Food Truck and Catering`, `Shindigs Catering Foodtruck`, `taco truck` | `food_truck`/`street_vendor` in alt; `*food truck*` in name | `category_alternate_exclude: food_truck, street_vendor` + name excludes |
+| **Gas stations / convenience stores** mislabeled `restaurant` | 10 by alt | `Casa Latina` (cp=`mexican_restaurant`, alt=`…,convenience_store`), `Paavo's Pizza` (alt=`…,convenience_store`) | `gas_station`/`convenience_store` in alt; gas-brand in name | `category_alternate_exclude: gas_station, convenience_store` + name brand excludes (`chevron`, `shell`, …) |
+| **Markets / grocery hybrids** | 92 by alt / 223 by name | `Anita Street Market` (cp=`mexican_restaurant`, alt=`…,grocery_store`), `Sharks fish&chiken+rooseveltsuperstore` (alt=`grocery_store,…`) | `grocery_store`/`supermarket` in alt; `market` in name | `category_alternate_exclude: grocery_store, supermarket` |
+| **Cafeterias** (institutional dining) | ~70 | `Children's Hospital Cafeteria`, `Lakeside Dining Hall`, `Cal/EPA Cafeteria` | `category_primary = cafeteria` | `category_primary_exclude: cafeteria` (also caught by `cafe` substring) |
+| **Coffee / cafe / bakery** | small | covered by the dedicated cafe/coffee filter | `coffee_shop`/`cafe`/`bakery`/`tea_room` primary | category excludes |
+| **Permanently-closed but still tagged `open`** | unknown — **invisible here** | (Norris's Ribs-style stale rows) | none in the data — `operating_status` is stale | **NOT filterable — enrichment needed (see below)** |
+
+### Two important sharp edges
+
+- **`cafe` substring also matches `cafeteria`.** Excluding `cafe` removes both
+  cafes (own filter) and institutional cafeterias — which is what we want here,
+  so it's a happy accident. `cafeteria` is also listed explicitly for clarity.
+- **Bare `bar` is forbidden** (see §0): it would substring-match
+  `bar_and_grill_restaurant`, `barbecue_restaurant` and `salad_bar` — 1,799 real
+  restaurants. Nightlife is excluded with `nightclub`/`brewery`/`distillery`/
+  `winery` only.
+
+### Defensive no-ops
+
+In the `basic_category = restaurant` universe there are **zero** `nightclub`,
+`brewery`, `distillery` or `winery` `category_primary` values — those venues live
+under other basic categories. The nightlife excludes are kept anyway as
+**harmless guards** so the filter stays correct if Overture re-tags a venue.
+
+### Stale `operating_status` (the "Norris's Ribs" problem)
+
+We pulled with `operating_status = open`, so every row claims to be open and
+**no closed venues are visible to filter against**. Permanently-closed
+restaurants that Overture still tags `open` (the user's "Norris's Ribs" example,
+`confidence 0.77`, which clears the `0.7` gate) therefore **cannot be removed by
+any admin filter** — this is a **data-freshness / enrichment** problem, not a
+filter problem. Recommend a periodic enrichment pass (Google/Places re-check)
+to refresh `operating_status`; flag as **enrichment-needed**.
+
+---
+
+## 4. Proposed filter (v1)
+
+### Top controls
+
+| Setting | Value |
+|---|---|
+| Saved filter | `Restaurants` |
+| Distance | `10.0` miles (`1`–`3` urban, `10` rural) |
+| Max results | `200` |
+| Min confidence | `0.7` (below the `0.77` sentinel; see §5) |
+| Operating status | `open` |
+| Deduplicate addresses | **ON** |
+
+### Include — Basic category (include)
+
+```
+restaurant
+```
+
+### Exclude — Category primary (exclude)
+
+```
+fast_food_restaurant
+food_truck
+street_vendor
+coffee_shop
+cafe
+bakery
+nightclub
+brewery
+distillery
+winery
+caterer
+food_court
+cafeteria
+```
+
+### Exclude — Category alternate (exclude)
+
+Removes venues whose *secondary* category reveals a non-restaurant purpose — this
+is where the gas-station / convenience / market / caterer leaks (whose
+`category_primary` is a real `*_restaurant`) are actually caught:
+
+```
+fast_food_restaurant
+food_truck
+street_vendor
+coffee_shop
+cafe
+bakery
+nightclub
+brewery
+distillery
+winery
+caterer
+food_court
+gas_station
+convenience_store
+grocery_store
+supermarket
+```
+
+### Exclude — Business name primary (exclude)
+
+Catches caterers/trucks/gas-brands that carry a clean `*_restaurant` category:
+
+```
+*catering*
+*food truck*
+*taco truck*
+chevron
+shell
+exxon
+mobil
+marathon
+circle k
+7-eleven
+```
+
+> Bare `market` is **deliberately NOT** a name exclude: it would drop legit
+> places like `Anita Street Market` only if you also want to lose `… Market &
+> Grill` style restaurants. The `grocery_store`/`supermarket` **alt** excludes
+> already remove the true store hybrids without risking restaurant names.
 
 ### Query builder
 
 ```
-basic_category_include and category_primary_exclude and category_alternate_exclude and name_primary_exclude
+basic_category_include
+  and category_primary_exclude
+  and category_alternate_exclude
+  and name_primary_exclude
 ```
 
-Plain English: **must** be `basic_category = restaurant`, **and** not match any
-primary-category exclude, **and** not match any alternate-category exclude, **and**
-its primary name isn't in the name-exclude list.
+### Quality gate (future — widget-side)
+
+> **Ideal:** drop a row when `confidence < 0.5` AND it has no website. This targets
+> the unverifiable long tail (ghost listings, abandoned pages) while protecting
+> the 8,612 sentinel-`0.77` records and every websited restaurant. **Deferred
+> (requires dev)** — the admin can't express a compound rule, so `min_confidence
+> = 0.7` is the interim stand-in.
 
 ---
 
-## 2. What changed from v2 → v3 and why it helped
+## 5. Min-confidence & dedupe decisions
 
-| Lever | v2 | v3 | Effect |
-|---|---|---|---|
-| Min confidence | `0.0` | **`0.7`** | Drops the worst-tagged noise, incl. the **Pelican Seafood** retail market (conf 0.53) and ghost/duplicate fragments. |
-| Deduplicate addresses | OFF | **ON** | Collapses true duplicate rows (e.g. two `Pot Belli Deli` records, `Goodfella's` fragments at one address). |
-| Name excludes | truck only | **+ market/grocery/tienda tokens** | Catches retail markets mislabeled as `*_restaurant` (Lama's Kitchen **& Seafood Market**, McManus Seafood, La Michoacana, etc.). |
+### Why `min_confidence = 0.7` (kept from the user's filter)
 
-**Net:** 158 → 104, and the obvious "that's not a restaurant" rows a homebuyer would
-notice are largely gone.
-
----
-
-## 3. Known trade-offs of v3 (accepted for now)
-
-- **Min confidence `0.7` drops some real restaurants.** Genuine spots tagged low in
-  Overture (e.g. `Festival Italiano` 0.08, `ZENSHI` 0.27, `Kame` 0.30) won't appear.
-  This was an intentional precision-over-recall choice. Revisit once the data-layer
-  freshness check (below) exists, then you can safely lower the floor again.
-- **Name-token market excludes are blunt.** `*market*` would also drop a legitimate
-  `Market Street Grill`-type name. None existed in the test set, but it's a
-  nationwide risk — the durable fix is the `is_retail_food_market` flag below, after
-  which these name tokens can be removed.
-- **Address dedup can hide a real co-located restaurant.** ON is right for this area,
-  but in food-hall / food-court settings it keeps only the highest-confidence tenant.
-  The durable fix is dedup by **(address + name)**, not address alone.
-
----
-
-## 4. Issues v3 does NOT fix (these are why the dev section exists)
-
-Even at 104 results, these slip through because **the filter only reads Overture
-fields, and Overture is wrong or stale**:
-
-| Problem | Example still in results | Root cause |
+| Option | Effect | Verdict |
 |---|---|---|
-| **Permanently closed, tagged `open`** | **Norris's Ribs** (demolished 2017 — confirmed [TCPalm](https://www.floridatoday.com/story/opinion/columnists/anthony-westbury/2017/12/19/out-old-ribs-joint-new-u-s-1-port-st-lucie-anthony-westbury/960696001/)); conf 0.77 so it clears the gate | `operating_status` is stale; no freshness check |
-| **National fast-food chains** | **Pizza Hut** (`brand_wikidata Q191615`), **Jack in the Box** | Tagged `pizza_restaurant` / `burger_restaurant`, not `fast_food_restaurant` |
-| **Gas-station / counter brands** | **Krispy Krunchy Chicken** (no address) | Tagged `chicken_restaurant` |
-| **Same brand, multiple addresses** | `Goodfella's Pizza` ×3, `A Touch of Brooklyn` ×2, `Sonny's BBQ` ×2, `Dale's BBQ South` ×2 | Address dedup can't merge across distinct addresses / spelling variants |
-| **Clubs / venues serving food** | `American Legion of Ft. Pierce` (alt `bar`) | Tagged `basic_category = restaurant` |
+| `min_confidence = 0.78` | Deletes all 8,612 `0.77`-sentinel rows (Chipotle, Denny's, McDonald's included) | ❌ reject |
+| **`min_confidence = 0.7`** | `0.77 > 0.7`, so every sentinel survives; drops the 3,210 rows below `0.7` (11%) — overwhelmingly the low-signal caterer/food-truck/ghost leaks (many at conf 0.2–0.5) | ✅ keep |
+| `min_confidence = 0` (none) | Keeps everything, including obvious junk | ⚠️ too loose |
+
+The `0.7` floor is safe **only because it sits below the `0.77` sentinel**. The
+key teaching from the gym/cafe work still holds: never set a floor *at or above*
+`0.77`. It does **not** catch the stale-closed "Norris's Ribs" case (conf `0.77`
+> `0.7`, so it survives) — that's the enrichment problem in §3, not a gate
+problem.
+
+### Why **Deduplicate addresses = ON**
+
+The raw pull is full of the same venue listed multiple times:
+
+- **Exact same name + address:** 409 groups, **417 redundant rows** (e.g.
+  `Chick-fil-A`, `Marco's Pizza`, `Johnny Rockets`, `O-Ku` each appear 3×).
+- **Same address (any name), which `show_duplicates` collapses by keeping the
+  highest-confidence record:** ~4,611 address groups, **~7,179 redundant rows
+  (~26% of the dataset)**. This also matches the user's reported dups across
+  *different* addresses for the same brand (e.g. three `A Touch of Brooklyn`
+  rows, `Goodfella's Pizza`, `Big Worm's BBQ`) — those collapse once duplicates
+  per address are removed.
+
+Turning **Deduplicate addresses ON** is the single biggest cleanliness win and is
+strongly recommended.
 
 ---
 
-## Dev team: what to improve next
+## 6. How this improves on the user's current `Restaurants` filter
 
-The admin filter is now good enough to ship. The remaining wins are **data-layer**,
-not filter-tuning — the same enrichment pattern we used for the Hospital filter. In
-priority order:
+| Issue in the user's saved filter | What happens today | This v1 fix |
+|---|---|---|
+| **Gas-station leak** ("Chevron of Vero Beach": cp=`restaurant`, alt=`gas_station,convenience_store`) | survives — no gas/convenience exclude | `category_alternate_exclude: gas_station, convenience_store` + name brands (`chevron`, `shell`, …) |
+| **Caterer leak** ("DiMichelli's Catering": cp=`restaurant`, so the *category-primary* `caterer` exclude misses it) | survives | adds `category_alternate_exclude: caterer` **and** `name_primary_exclude: *catering*` (the primary exclude alone can't catch a `*_restaurant`-tagged caterer) |
+| **Duplicate rows** ("A Touch of Brooklyn", "Goodfella's Pizza", "Big Worm's BBQ" appear multiple times) | all shown — `show_duplicates` is OFF | **Deduplicate addresses ON** → collapses ~26% redundant rows |
+| **Stale permanently-closed** ("Norris's Ribs", conf `0.77`) | survives both `operating_status=open` and the `0.7` gate | **cannot be fixed by any filter** — documented as enrichment-needed (§3) |
+| **Markets / grocery hybrids** | partially caught by name excludes only | adds `category_alternate_exclude: grocery_store, supermarket` for the alt-tagged hybrids |
+| **Cafeterias** | not excluded | adds `category_primary_exclude: cafeteria` |
+| **Risk: bare `bar` token** | n/a (user filter doesn't use it) | explicitly rejected — would nuke `bar_and_grill`, `barbecue`, `salad_bar` (1,799 rows) |
 
-### P1 — Operating-status freshness (fixes "closed but listed")
-- **Problem:** Overture `operating_status` is stale; permanently-closed places (e.g.
-  Norris's Ribs, closed 8 years) still read `open`. No boolean filter can catch this.
-- **Build:** add `status_verified_at` (timestamp) and `status_source` (text) columns.
-  A scheduled job (cron/Celery) re-confirms `operating_status` against a fresher
-  source — **Google Places Details** (`business_status`) or OSM — for POIs shown to
-  users. Drop / hide anything not confirmed open within *N* months (suggest 12).
-- **Filter hook:** add an `Operating status verified within` control, or simply have
-  the widget query exclude `status_verified_at < now() - interval`.
-
-### P2 — Retail-food-market flag (fixes markets mislabeled as restaurants)
-- **Problem:** retail seafood/meat/grocery markets are tagged `*_restaurant`
-  (Pelican Seafood = retail market; McManus Seafood; La Michoacana). Today we catch
-  them with blunt `*market*` name tokens, which risks dropping real "Market Grill"
-  names nationwide.
-- **Build:** add `is_retail_food_market` (bool), populated by enrichment using
-  category + name signals (`market`, `grocery`, `butcher`, `fishmonger`, `tienda`,
-  `meat market`, `seafood market`) **and** a secondary source (Google `types`
-  contains `grocery_or_supermarket` / `food` without `restaurant`).
-- **Payoff:** exclude `is_retail_food_market = true` from Restaurants, then **remove
-  the `*market*` name tokens** from the admin filter. Also feeds the future Grocery
-  filter.
-
-### P3 — Chain / fast-food normalization (fixes Pizza Hut, Jack in the Box, etc.)
-- **Problem:** national QSR chains are tagged as cuisine restaurants
-  (`pizza_restaurant`, `burger_restaurant`), so category excludes miss them.
-- **Build:** maintain a **brand-based** QSR exclude keyed on `brand_wikidata` /
-  `brand_name_primary` (Pizza Hut `Q191615`, Jack in the Box, KFC, Domino's, etc.) —
-  a small national reference list, not per-city. Add `is_chain_fast_food` (bool).
-- **Filter hook:** exclude `is_chain_fast_food = true` (the widget audience wants
-  local sit-down places, not chains). Keep it a flag so it's easy to toggle per
-  category/product.
-
-### P4 — Smarter dedup (fixes same-brand duplicates & co-located distinct places)
-- **Problem:** address-only dedup both (a) misses same-brand duplicates at *different*
-  addresses / spelling variants, and (b) can hide a legitimately co-located second
-  restaurant (food halls).
-- **Build:** dedup on a composite key — normalized `(name + address)` plus a small
-  geospatial tolerance (e.g. within ~25 m) — instead of address alone. Prefer the
-  highest-confidence, most-complete record; keep distinct names at the same address.
-
-### P5 — Confidence is not freshness (process note)
-- Document for the team that Overture `confidence` measures *tagging certainty*, not
-  whether a place is open or correctly categorized. Once P1–P3 exist, **lower
-  `min_confidence` back toward ~0.3** to recover the real low-confidence restaurants
-  the 0.7 gate currently hides.
-
-### Suggested column summary
-
-| Column | Type | Populated by | Used to |
-|---|---|---|---|
-| `status_verified_at` | timestamp | P1 cron (Google/OSM) | drop stale/closed |
-| `status_source` | text | P1 cron | auditing |
-| `is_retail_food_market` | bool | P2 enrichment | exclude markets / feed Grocery |
-| `is_chain_fast_food` | bool | P3 brand list | exclude national QSR |
-
-Once P1–P3 ship, the admin filter can be simplified back to:
-`basic_category_include and category_primary_exclude and category_alternate_exclude`
-plus the three new boolean excludes — and the name-token hacks and the high
-confidence floor can be retired.
+The user's existing excludes (`fast_food_restaurant`, `food_truck`,
+`street_vendor`, `coffee_shop`, `cafe`, `bakery`, `nightclub`, `brewery`,
+`distillery`, `winery`, `caterer`, `food_court`) are all **retained** — this v1
+extends them with the alt-list and name handling needed to plug the documented
+leaks, and turns on address dedupe.
 
 ---
 
-## Appendix A — config history
+## Appendix A — reproduce
 
-- **v1:** broad category includes (`restaurant`, `casual_eatery`, `fine_dining` in
-  primary **and** alternate). Leaked ~12 non-restaurants (grocery/convenience stores,
-  an RV park, a freight terminal, a social-service org, a cake shop, restaurant-supply
-  wholesale) because many non-restaurants list `*_restaurant` as an *alternate*.
-- **v2 / v2.1:** gated on `basic_category = restaurant`, cleared the primary/alternate
-  includes, trimmed cuisine tokens out of the excludes. Dedup OFF, confidence 0.0.
-  Result ~158 with retail markets and stale/closed places still present.
-- **v3 (current):** confidence `0.7`, dedup **ON**, added market/grocery/tienda name
-  excludes. Result **104**, shippable; residual issues are data-layer (see Dev team).
+```bash
+pip install requests
+python scripts/scrape_restaurants.py --pins data/coffee_tea_raw/pins.csv   # full pull (~6-8 min)
+python scripts/analyze_restaurants.py                                       # summary stats
+```
+
+Raw dataset + column docs: [`../../data/restaurants_raw/README.md`](../../data/restaurants_raw/README.md).
