@@ -58,6 +58,38 @@ _HOSP_NAME_EXCLUDE = [
     "cancer care", "cancer center", "therapy",
 ]
 
+# --- Urgent Care shared lists -----------------------------------------------
+# Include = generic urgent-care phrases + UC-specific brand names. Deliberately
+# EXCLUDES bare hospital-system names (Cleveland Clinic, Kaiser, Ascension, etc.)
+# because those match real hospitals; system-branded urgent cares are caught by
+# the generic "urgent care"/"immediate care"/"convenient care" tokens instead.
+_UC_NAME_INCLUDE = [
+    # generic phrases (contains-match, case-insensitive)
+    "urgent care", "immediate care", "express care", "walk-in clinic",
+    "walk in clinic", "walk-in care", "walk in care", "minute clinic",
+    "minuteclinic", "convenient care", "convenientmd", "quick care",
+    "quickcare", "nowcare", "after hours care", "centra care", "instacare",
+    "zoom care", "zoomcare", "redicare", "redimed", "velocity care",
+    "walk-in center", "walk in center",
+    # UC-specific brands whose storefront name may omit a generic phrase
+    "concentra", "medexpress", "fastmed", "carenow", "nextcare", "citymd",
+    "gohealth", "wellnow", "carbon health", "patient first", "md now",
+    "fast pace", "american family care", "afc urgent", "doctors care",
+    "pm pediatrics", "carespot", "medpost", "carewell", "wellstreet",
+    "physicianone", "the little clinic", "next level urgent",
+    "exer urgent", "total access urgent",
+]
+# Exclude = true ERs / hospital emergency departments and vet/animal care. We do
+# NOT exclude "hospital"/"medical center" by name (that would drop legitimate
+# hospital-affiliated urgent cares like "UVM Medical Center Urgent Care").
+_UC_NAME_EXCLUDE = [
+    "emergency department", "emergency room", "freestanding emergency",
+    "trauma center", "veterinary", "veterinarian", "animal hospital",
+    "pet hospital", "animal urgent",
+    # non-medical noise caught by broad brand tokens (e.g. Valvoline Express Care)
+    "valvoline", "oil change", "jiffy lube",
+]
+
 # name -> config. `name` becomes the saved_filter_name (the "-cursor" tag set).
 FILTERS: dict[str, dict] = {
     "gym-cursor": {
@@ -237,6 +269,32 @@ FILTERS: dict[str, dict] = {
             "exxon", "mobil", "marathon", "circle k", "7-eleven",
         ],
         "query_builder": "basic_category_include and category_primary_exclude and category_alternate_exclude and name_primary_exclude",
+    },
+    # Urgent Care subcategory (under the Hospital main category). In Overture's
+    # hospital universe urgent cares are mislabeled medical_center/hospital/
+    # emergency_room (category_primary=urgent_care_clinic = 0 here), so the NAME is
+    # the only reliable signal. Include = urgent-care name tokens / UC-specific
+    # brands (NOT bare hospital-system names, which match hospitals). Hospitals are
+    # excluded structurally: a full hospital never carries an urgent-care token.
+    "urgent-care-cursor": {
+        "raw_csv": DATA / "hospitals_raw" / "hospitals_master.csv",
+        "max_results": "100",
+        "min_confidence": "",
+        "operating_status": "open",
+        "has_website": "",
+        "show_duplicates": False,  # dedupe on (per admin checkbox semantics)
+        "category_primary_include": ["urgent_care_clinic"],
+        "name_primary_include": _UC_NAME_INCLUDE,
+        "name_common_include": _UC_NAME_INCLUDE,
+        "category_primary_exclude": [
+            "animal_hospital", "emergency_pet_hospital", "hospitalist",
+            "hospital_equipment_and_supplies", "oil_change_station", "automotive",
+            "hospice", "funeral", "lawyer", "attorney",
+        ],
+        "category_alternate_exclude": ["veterinarian", "pets", "pet_services"],
+        "name_primary_exclude": _UC_NAME_EXCLUDE,
+        "name_common_exclude": _UC_NAME_EXCLUDE,
+        "query_builder": "(category_primary_include or name_primary_include or name_common_include) and category_primary_exclude and category_alternate_exclude and name_primary_exclude and name_common_exclude",
     },
 }
 

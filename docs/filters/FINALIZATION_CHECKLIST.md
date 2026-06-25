@@ -6,6 +6,7 @@ Legend: ✅ finalized · 🔄 in review · ⬜ not started
 | Category | Production filter | Status | Notes |
 |---|---|---|---|
 | **Hospitals** | `hospital-cursor` (id 434, **v2**) | 🔄 v2 live, pending sign-off | v1 had a precision hole (Overture mislabels doctor offices as `hospital`); v2 fixes it — see below |
+| **Urgent Care** (sub of Hospital) | `Urgent Care` (id 463) | 🔄 v1 live, pending sign-off | name-driven (urgent_care_clinic=0 in raw); 0 hospital leaks across 6 metros. See `urgent_care.md`. **Open:** `category_key` not linked |
 | Cafes | `cafe-cursor` (id 435) | ⬜ | built + validated, not yet head-to-head vs `Cafe` |
 | Grocery | `grocery-cursor` (id 436) | ⬜ | built + validated, not yet head-to-head vs `Grocery` |
 | Restaurants | `restaurant-cursor` (id 437) | ⬜ | built + validated, not yet head-to-head vs `Restaurants` |
